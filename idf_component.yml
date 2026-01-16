@@ -1,0 +1,12 @@
+version: "1.0.0"
+license: "Apache 2.0"
+description: "Deep sleep component for ESP-IDF version 5.5.0+ using a C++ class"
+url: "https://github.com/elrebo-de/deep_sleep"
+issues: "https://github.com/elrebo-de/deep_sleep/issues"
+repository: "https://github.com/elrebo-de/deep_sleep.git"
+maintainers:
+  - Christoph Oberle <christoph.oberle@elrebo.de>
+files:
+  use_gitignore: true
+dependencies:
+  idf: ">=5.5.0"
