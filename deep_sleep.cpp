@@ -35,16 +35,21 @@ DeepSleep::DeepSleep( std::string tag,
         case ESP_SLEEP_WAKEUP_TIMER : ESP_LOGI(tag.c_str(), "Wakeup caused by timer"); break;
         case ESP_SLEEP_WAKEUP_TOUCHPAD : ESP_LOGI(tag.c_str(), "Wakeup caused by touchpad"); break;
         case ESP_SLEEP_WAKEUP_ULP : ESP_LOGI(tag.c_str(), "Wakeup caused by ULP program"); break;
+        case ESP_SLEEP_WAKEUP_GPIO : ESP_LOGI(tag.c_str(), "Wakeup caused by gpio"); break;
         default : ESP_LOGI(tag.c_str(), "Wakeup was not caused by deep sleep: %d",wakeup_reason); break;
     }
 
+    if (ESP_SLEEP_WAKEUP_EXT1 == wakeup_reason || ESP_SLEEP_WAKEUP_GPIO == wakeup_reason) {
+        int GPIO_reason = esp_sleep_get_gpio_wakeup_status();
+        int gpio = log10(GPIO_reason)/log10(2);
+        ESP_LOGI(tag.c_str(), "GPIO that triggered the wake up: GPIO %i", gpio);
+    }
 }
 
 DeepSleep::~DeepSleep() {}
 
-bool DeepSleep::GoToDeepSleep( unsigned long sleepTime,
-                               std::string sleepTimeUnit // {"min", "sec", "milliSec", "microSec"}
-                             )
+esp_err_t DeepSleep::EnableTimerWakeup( unsigned long sleepTime,
+                                        std::string sleepTimeUnit) // {"min", "sec", "milliSec", "microSec"}
 {
     // calculate timerIntervall
     unsigned long timerIntervall = sleepTime;
@@ -55,39 +60,70 @@ bool DeepSleep::GoToDeepSleep( unsigned long sleepTime,
         sleepTimeUnit == std::string("sec") ||
         sleepTimeUnit == std::string("milliSec")) timerIntervall = timerIntervall * 1000;
 
-    //***** // deep sleep aktivieren
-    //***** WiFi.disconnect();
+    ESP_LOGI(tag.c_str(), "Setup chip to sleep for %lu %s", sleepTime, sleepTimeUnit.c_str());
+    return esp_sleep_enable_timer_wakeup(timerIntervall);
+}
 
-    //***** //Serial.println("Execution Time: " + String(millis());
-    ESP_LOGI(tag.c_str(), "Setup ESP32 to sleep until button pressed or for %lu %s", sleepTime, sleepTimeUnit.c_str());
-    esp_sleep_enable_timer_wakeup(timerIntervall);
+esp_err_t DeepSleep::EnableGpioWakeup( gpio_num_t gpio, int level) // level: 1 = High, 0 = Low)
+{
+    esp_err_t rc;
+    bool valid;
 
-    //***** #if defined(M5_ATOM_LITE)
-    //*****   // M5_ATOM_LITE: wir benutzen ext0_wakeup mit dem Button
-    //*****   esp_sleep_enable_ext0_wakeup((gpio_num_t) buttonPin, 0);  //1 = High, 0 = Low
-    //*****   rtc_gpio_pullup_en((gpio_num_t) buttonPin);
-    //*****   rtc_gpio_pulldown_dis((gpio_num_t) buttonPin);
-    //***** #elif defined(ESP32_C6_MINI) || defined(ESP_C3_MINI)
-    //*****   // ESPC6Mini: wir benutzen ext1_wakeup mit einem externen Button an GPIO 2,
-    //*****   // weil der Boot-Button im Deep Sleep Modus nicht geht
-    //*****
-    //*****   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-    //*****
-    //*****   // Configure GPIO02 as RTC IO for EXT1 wake-up
-    //*****   //rtc_gpio_deinit((gpio_num_t) buttonPin);
-    //*****
-    //*****   // Enable EXT1 wake-up source
-    //*****   esp_sleep_enable_ext1_wakeup_io((1ULL << buttonPin), ESP_EXT1_WAKEUP_ANY_HIGH);
-    //*****
-    //*****   // enable pull-down resistors and disable pull-up resistors
-    //*****   rtc_gpio_pulldown_en((gpio_num_t) buttonPin);
-    //*****   rtc_gpio_pullup_dis((gpio_num_t) buttonPin);
-    //***** #endif
+    valid = esp_sleep_is_valid_wakeup_gpio(gpio);
+    ESP_LOGI(tag.c_str(), "GPIO %u is valid wakeup gpio: %s", gpio, valid ? "true" : "false");
 
+    ESP_LOGI(tag.c_str(), "gpio_config");
+    if (level == 1) {
+        const gpio_config_t config = {
+            .pin_bit_mask = (1ULL << gpio),
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = (gpio_pullup_t) 0,
+            .pull_down_en = (gpio_pulldown_t) 1,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        rc = gpio_config(&config);
+        if (rc != ESP_OK) {
+            ESP_LOGI(tag.c_str(), "rc=%u", rc);
+            return rc;
+        }
+    }
+    else {
+        const gpio_config_t config = {
+            .pin_bit_mask = (1ULL << gpio),
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = (gpio_pullup_t) 1,
+            .pull_down_en = (gpio_pulldown_t) 0,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        rc = gpio_config(&config);
+        if (rc != ESP_OK) {
+            ESP_LOGI(tag.c_str(), "rc=%u", rc);
+            return rc;
+        }
+    }
+
+    gpio_dump_io_configuration(stdout, (1ULL << gpio));
+
+    ESP_LOGI(tag.c_str(), "esp_deep_sleep_enable_gpio_wakeup");
+    rc = esp_deep_sleep_enable_gpio_wakeup( (1ULL << gpio),
+                                            (level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW)
+                                          );
+    if (rc != ESP_OK) {
+        ESP_LOGI(tag.c_str(), "rc=%u", rc);
+        return rc;
+    }
+    return rc;
+}
+
+esp_err_t DeepSleep::GoToDeepSleep()
+{
     ESP_LOGI(tag.c_str(), "Going to sleep now");
-    //***** Serial.flush();
-    esp_deep_sleep_start();
 
-    // this statement will only be reached, if deep sleep start did not work!
-    return false;
+    esp_err_t rc;
+    rc = esp_deep_sleep_try_to_start();
+
+    // this statement will only be reached, if esp_deep_sleep_try_to_start did not work!
+    ESP_LOGI(tag.c_str(), "rc of esp_deep_sleep_try_to_start: %u", rc);
+
+    return rc;
 }

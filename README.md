@@ -7,7 +7,7 @@ The component is implemented as C++ class `DeepSleep`.
 
 ## Connecting the component
 
-The constructor of class `DeepSleep` has one parameters:
+The constructor of class `DeepSleep` has two parameters:
 
 | Parameter | Type of Parameter | Usage                                        |
 |:----------|:------------------|:---------------------------------------------|
@@ -15,7 +15,35 @@ The constructor of class `DeepSleep` has one parameters:
 | bootCount | int *             | pointer to the bootCount in RTC_DATA storage |
 
 # Usage
+To use the DeepSleep component you have to include "deep_sleep.hpp" and 
+to define an int bootCount as RTC_DATA_ATTR.
 
+```
+#include "deep_sleep.hpp"
+RTC_DATA_ATTR int bootCount = 0;
+
+extern "C" void app_main(void)
+{
+    DeepSleep deepSleep(
+		std::string("DeepSleep"), // tag
+		&bootCount // Address of int bootCount in RTC_DATA
+    );
+    
+    ...
+    
+    ESP_LOGI(tag, "EnableTimerWakeup");
+    ESP_ERROR_CHECK(deepSleep.EnableTimerWakeup(30, "min"));  // enable wake up after 30 minutes sleep time
+
+    ESP_LOGI(tag, "EnableGpioWakeup");
+    ESP_ERROR_CHECK(deepSleep.EnableGpioWakeup((gpio_num_t) 2, 1));  // enable wake up when GPIO 2 is pulled up
+    
+    ESP_LOGI(tag, "GoToDeepSleep");
+    rc = deepSleep.GoToDeepSleep(); // go to deep sleep
+    
+    // this statement will not be reached, if GoToDeepSleep is working
+    ESP_LOGI(tag, "GoToDeepSleep rc=%u", rc);
+}
+```
 The 
 ## API
 The API of the component is located in the include directory ```include/deep_sleep.hpp``` and defines the
@@ -24,6 +52,13 @@ C++ class ```DeepSleep```
 ```C++
 /* class DeepSleep
    wrapper for esp deep sleep functionality
+
+   Wakeup sources can be:
+   * timer
+   * one gpio pin
+   
+   Tested with 
+   * ESP32C3
 */
 class DeepSleep {
 public:
@@ -33,11 +68,17 @@ public:
 	         );
 	virtual ~DeepSleep();
 
+    esp_err_t EnableTimerWakeup( unsigned long sleepTime,
+                                 std::string sleepTimeUnit // {"min", "sec", "milliSec", "microSec"}
+                               );
+    esp_err_t EnableGpioWakeup( gpio_num_t gpio,
+                                int level  // level: 1 = High, 0 = Low
+                              );
+	esp_err_t GoToDeepSleep();
+
 private:
     std::string tag = "DeepSleep";
-
-    RTC_DATA_ATTR int bootCount = 0;
-    unsigned long startTime;
+    esp_sleep_wakeup_cause_t wakeup_reason; // the wakeup reason for the last boot
 };
 ```
 

@@ -16,8 +16,19 @@
 #include "esp_sleep.h"
 #include "esp_log.h"
 
+#include "driver/gpio.h"
+#include "driver/rtc_io.h"
+#include "math.h"
+
 /* class DeepSleep
    wrapper for esp deep sleep functionality
+
+   Wakeup sources can be:
+   * timer
+   * one gpio pin
+
+   Tested with
+   * ESP32C3
 */
 class DeepSleep {
 public:
@@ -27,9 +38,13 @@ public:
 	         );
 	virtual ~DeepSleep();
 
-	bool GoToDeepSleep( unsigned long sleepTime,
-                        std::string sleepTimeUnit // {"min", "sec", "milliSec", "microSec"}
-	);
+    esp_err_t EnableTimerWakeup( unsigned long sleepTime,
+                            std::string sleepTimeUnit // {"min", "sec", "milliSec", "microSec"}
+                          );
+    esp_err_t EnableGpioWakeup( gpio_num_t gpio,
+                           int level  // level: 1 = High, 0 = Low
+                          );
+	esp_err_t GoToDeepSleep();
 
 private:
     std::string tag = "DeepSleep";

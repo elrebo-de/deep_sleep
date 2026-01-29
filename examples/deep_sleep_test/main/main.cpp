@@ -6,10 +6,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "driver/rtc_io.h"
-RTC_DATA_ATTR int bootCount = 0;
-
 #include "deep_sleep.hpp"
+RTC_DATA_ATTR int bootCount = 0;
 
 #include "esp_log.h"
 
@@ -17,6 +15,9 @@ static const char *tag = "deep sleep test";
 
 extern "C" void app_main(void)
 {
+    // short delay to reconnect logging
+    vTaskDelay(pdMS_TO_TICKS(500)); // delay 0.5 seconds
+
     ESP_LOGI(tag, "Example Program");
 
     /* Initialize DeepSleep class */
@@ -26,22 +27,20 @@ extern "C" void app_main(void)
 		&bootCount // Address of int bootCount in RTC_DATA
     );
 
+    ESP_LOGI(tag, "waiting for 5 seconds ...");
+    vTaskDelay(pdMS_TO_TICKS(5000)); // delay 5 seconds
+
     bool rc = false;
 
-    switch(bootCount) {
-        case 1:
-            vTaskDelay(pdMS_TO_TICKS(5000)); // delay 5 seconds
-            rc = deepSleep.GoToDeepSleep(30, "sec"); // go to deep sleep and sleep for 30 seconds
-            break;
-        case 2:
-            vTaskDelay(pdMS_TO_TICKS(15000)); // delay 15 seconds
-            rc = deepSleep.GoToDeepSleep(1, "min"); // go to deep sleep and sleep for 1 minute
-            break;
-        case 3:
-            vTaskDelay(pdMS_TO_TICKS(30000)); // delay 30 seconds
-            rc = deepSleep.GoToDeepSleep(2, "min"); // go to deep sleep and sleep for 10 minutes
-            break;
-    }
+    ESP_LOGI(tag, "EnableTimerWakeup");
+    ESP_ERROR_CHECK(deepSleep.EnableTimerWakeup(30, "sec"));  // enable wake up after 30 seconds sleep time
 
-    ESP_LOGI(tag, "GotoDeepSleep rc=%s", rc ? "true" : "false");
+    ESP_LOGI(tag, "EnableGpioWakeup");
+    ESP_ERROR_CHECK(deepSleep.EnableGpioWakeup((gpio_num_t) 2, 1));  // enable wake up when GPIO 2 is pulled up
+
+    ESP_LOGI(tag, "GoToDeepSleep");
+    rc = deepSleep.GoToDeepSleep(); // go to deep sleep
+
+    // this statement will not be reached, if GoToDeepSleep is working
+    ESP_LOGI(tag, "GoToDeepSleep rc=%u", rc);
 }
