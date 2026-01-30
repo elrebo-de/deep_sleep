@@ -18,6 +18,30 @@ The constructor of class `DeepSleep` has two parameters:
 To use the DeepSleep component you have to include "deep_sleep.hpp" and 
 to define an int bootCount as RTC_DATA_ATTR.
 
+The wakeup sources can be any of the following:
+
+* Timer
+* GPIO
+
+To enable wakeup by timer the method EnableTimerWakeup is used.
+
+Method EnableTimerWakeup has two parameters:
+
+| Parameter     | Type of Parameter | Usage                                                                            |
+|:--------------|:------------------|:---------------------------------------------------------------------------------|
+| sleepTime     | unsigned long     | the sleep time                                                                   |
+| sleepTimeUnit | std::string       | the unit in which the sleep time is given {"min", "sec", "milliSec", "microSec"} |
+
+To enable wakeup by GPIO the method EnableGpioWakeup is used.
+
+Method EnableGpioWakeup has two parameters:
+
+| Parameter | Type of Parameter | Usage                           |
+|:----------|:------------------|:--------------------------------|
+| gpio      | gpio_num_t        | the GPIO number                 |
+| level     | int               | the wakeup trigger level {1, 0} |
+
+
 ```
 #include "deep_sleep.hpp"
 RTC_DATA_ATTR int bootCount = 0;

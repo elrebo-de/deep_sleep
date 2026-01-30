@@ -10,6 +10,7 @@
 RTC_DATA_ATTR int bootCount = 0;
 
 #include "esp_log.h"
+#include "sdkconfig.h"
 
 static const char *tag = "deep sleep test";
 
@@ -36,7 +37,13 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(deepSleep.EnableTimerWakeup(30, "sec"));  // enable wake up after 30 seconds sleep time
 
     ESP_LOGI(tag, "EnableGpioWakeup");
-    ESP_ERROR_CHECK(deepSleep.EnableGpioWakeup((gpio_num_t) 2, 1));  // enable wake up when GPIO 2 is pulled up
+    #if defined(CONFIG_IDF_TARGET_ESP32C3)
+        ESP_ERROR_CHECK(deepSleep.EnableGpioWakeup((gpio_num_t) 2, 1));  // enable wake up when GPIO 2 is pulled up
+    #elif defined(CONFIG_IDF_TARGET_ESP32)
+        ESP_ERROR_CHECK(deepSleep.EnableGpioWakeup((gpio_num_t) 39, 0));  // enable wake up when GPIO 39 is pulled down
+    #elif defined(CONFIG_IDF_TARGET_ESP32C6)
+        ESP_ERROR_CHECK(deepSleep.EnableGpioWakeup((gpio_num_t) 2, 1));  // enable wake up when GPIO 2 is pulled up
+    #endif
 
     ESP_LOGI(tag, "GoToDeepSleep");
     rc = deepSleep.GoToDeepSleep(); // go to deep sleep
